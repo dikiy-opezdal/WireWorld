@@ -14,15 +14,17 @@ LDFLAGS   = -static -lopengl32 -L$(LIBDIR) -lglfw3
 SRC       = $(wildcard   $(SRCDIR)/*.c)
 OBJ       = $(subst      $(SRCDIR)/,$(BLDDIR)/,$(SRC:.c=.o))
 
-$(BLDDIR)/%.o: $(SRCDIR)/%.c
+$(BLDDIR)/%.o: $(SRCDIR)/%.c | $(BLDDIR)
 	$(CC) -c $(CFLAGS) -o $@ $^
 all: $(OBJ)
 	$(CC) $(OBJ) $(CFLAGS) $(LDFLAGS) -o $(TARGET)
 
 native:
 	$(MAKE) CFLAGS="$(CFLAGS) -march=native" $(MAKEFLAGS)
-run:
+run: all
 	$(TARGET)
 clean:
 	del /S /F /Q $(BLDDIR)\*
 	del $(TARGET).exe
+$(BLDDIR):
+	mkdir $(BLDDIR)
