@@ -1,7 +1,7 @@
-.PHONY: all clean run
+.PHONY: all clean
 
 CC        = cc
-TARGET    = bin\WireWorld
+TARGET    = WireWorld
 
 SRCDIR    = src
 INCDIR    = include
@@ -17,14 +17,9 @@ OBJ       = $(subst      $(SRCDIR)/,$(BLDDIR)/,$(SRC:.c=.o))
 $(BLDDIR)/%.o: $(SRCDIR)/%.c | $(BLDDIR)
 	$(CC) -c $(CFLAGS) -o $@ $^
 all: $(OBJ)
-	$(CC) $(OBJ) $(CFLAGS) $(LDFLAGS) -o $(TARGET)
+	$(CC) $(OBJ) $(CFLAGS) $(LDFLAGS) -o $(BLDDIR)/$(TARGET)
 
-native:
-	$(MAKE) CFLAGS="$(CFLAGS) -march=native" $(MAKEFLAGS)
-run: all
-	$(TARGET)
 clean:
-	del /S /F /Q $(BLDDIR)\*
-	del $(TARGET).exe
+	del /Q $(BLDDIR)
 $(BLDDIR):
 	mkdir $(BLDDIR)

@@ -3,5 +3,6 @@
         "stdio.h": "c",
         "stdlib.h": "c",
         "call.h": "c"
-    }
+    },
+    "git.decorations.enabled": false
 }

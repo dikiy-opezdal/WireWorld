@@ -1,107 +1,128 @@
 #include <stdio.h>
 #include <stdbool.h>
-#include <string.h>
-#include <stdlib.h>
+#include <glad/glad.h>
+#include <GLFW/glfw3.h>
+#include <cglm/cglm.h>
+#include <cglm/affine.h>
+#include <cglm/cam.h>
+#include <cglm/call.h>
+#include <shaders.h>
 
-#define byte unsigned char
+#define VERTEX_SHADER_PATH "src/shader.vert"
+#define FRAGMENT_SHADER_PATH "src/shader.frag"
 
-#define CHUNK_SIZE 16
-#define MAP_SIZE 128
+unsigned int SCR_WIDTH    = 800;
+unsigned int SCR_HEIGHT   = 450;
+unsigned int SCALE        = 400;
 
-enum CELLS {
-    EMPT,
-    HEAD,
-    TAIL,
-    COND,
-};
+unsigned int shader_program;
 
-typedef struct
-{
-    byte cells[CHUNK_SIZE * CHUNK_SIZE];
-    unsigned int update_queue[CHUNK_SIZE * CHUNK_SIZE]; // #TODO: dynamic array
-    unsigned int queue_length; 
-} chunk_t;
-
-typedef struct
-{
-    chunk_t chunks[MAP_SIZE * MAP_SIZE]; // #TODO: dynamic array
-    unsigned int update_queue[MAP_SIZE * MAP_SIZE]; // #TODO: dynamic array
-    unsigned int queue_length;
-} map_t;
-
-map_t map;
-map_t buffer;
-
-byte count_neighbours(chunk_t *chunk, byte cell) { // #FIXME: chunk borders
-    byte neighbours = 0;
-
-    for (int i = -4; i < 5; i++) {
-        if (chunk->cells[cell + i] == HEAD) neighbours++;
-    }
-
-    return neighbours;
+void render(GLFWwindow *window) {
+    glClear(GL_COLOR_BUFFER_BIT);
+    glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_BYTE, 0);
 }
 
-void chunk_draw(chunk_t chunk) {
-    for (int i = 0; i < CHUNK_SIZE * CHUNK_SIZE; i++) {
-        if (i % CHUNK_SIZE == 0) printf("\n");
-        printf("%d", chunk.cells[i]);
+void proccess_input(GLFWwindow *window) {
+    if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS) {
+        glfwSetWindowShouldClose(window, true);
     }
 }
 
-void cell_update(chunk_t *chunk, byte cell) { // #FIXME: chunk borders
-    switch (chunk->cells[cell]) {
-    case HEAD:
-        chunk->cells[cell] = TAIL;
-        break;
-    case TAIL:
-        chunk->cells[cell] = COND;
-        break;
-    case COND:
-        byte neighbours = count_neighbours(chunk, cell);
-        printf("%d\n", neighbours);
-        if (neighbours == 1 || neighbours == 2) {
-            chunk->cells[cell] = HEAD;
-        }
-        break;
-    }
+void init_buffers() {
+    char vertex_data[] = {
+        0,  0,
+        0, -2,
+        2,  0,
+        2, -2,
+    };
+    unsigned char index_data[] = {
+        0, 2, 1,
+        2, 3, 1, 
+    };
+
+    unsigned int VAO;
+    glGenVertexArrays(1, &VAO);
+    glBindVertexArray(VAO);
+
+    unsigned int VBO;
+    glGenBuffers(1, &VBO);
+    glBindBuffer(GL_ARRAY_BUFFER, VBO);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(vertex_data), vertex_data, GL_STATIC_DRAW);
+
+    unsigned int EBO;
+    glGenBuffers(1, &EBO);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(index_data), index_data, GL_STATIC_DRAW);
+
+    glVertexAttribPointer(0, 2, GL_BYTE, GL_FALSE, 2 * sizeof(char), (void*)0);
+    glEnableVertexAttribArray(0);
+
+    glUniform1f(glGetUniformLocation(shader_program, "u_scale"), SCALE);
+    glUniform2f(glGetUniformLocation(shader_program, "u_resolution"), (float)SCR_WIDTH, (float)SCR_HEIGHT);            
 }
 
-void map_update() {
-    memcpy(&buffer, &map, sizeof(map));
-    for (int i = 0; i < buffer.queue_length; i++) {
-        for (int j = 0; j < buffer.chunks[buffer.update_queue[i]].queue_length; j++) {
-            cell_update(&map.chunks[buffer.update_queue[i]], buffer.chunks[buffer.update_queue[i]].update_queue[j]);
-        }
-    }
+void framebuffer_size_callback(GLFWwindow *window, int width, int height) {
+    glViewport(0, 0, width, height);
+    glUniform2f(glGetUniformLocation(shader_program, "u_resolution"), (float)width, (float)height);
+
+    SCR_WIDTH = width;
+    SCR_HEIGHT = height;
 }
 
-void set_cell(int x, int y, byte type) { // #FIXME: can be already in queue
-    int chunk_id = (int)(y / MAP_SIZE) * MAP_SIZE + (int)(x / MAP_SIZE);
-    int cell_id = y % CHUNK_SIZE * CHUNK_SIZE + x % CHUNK_SIZE;
+int init_window(GLFWwindow **window) {
+    glfwInit();
 
-    map.chunks[chunk_id].cells[cell_id] = type;
-    if (type != EMPT) {
-        map.chunks[chunk_id].update_queue[map.chunks[chunk_id].queue_length] = cell_id;
-        map.chunks[chunk_id].queue_length++;
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+#ifdef __APPLE__
+    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
+#endif
+
+    *window = glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, "WireWorld", NULL, NULL);
+    if (*window == NULL) {
+        printf("Failed to create GLFW window");
+        return -1;
     }
-}
+    glfwMakeContextCurrent(*window);
 
-void map_init() {
-    map.update_queue[map.queue_length] = 0;
-    map.queue_length++;
-    set_cell(5, 5, HEAD);
+    if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) {
+        printf("Failed to initialize GLAD");
+        return -1;
+    }
+
+    glViewport(0, 0, SCR_WIDTH, SCR_HEIGHT);
+    glfwSetFramebufferSizeCallback(*window, framebuffer_size_callback);
+
+    glClearColor(0.5f, 0.5f, 1.0f, 1.0f);
+
+    return 1;
 }
 
 int main() {
-    map_init();
-    chunk_draw(map.chunks[0]);
+    GLFWwindow *window = NULL;
+    
+    if (!init_window(&window)) {
+        glfwTerminate();
+        return -1;
+    }
 
-    map_update();
-    chunk_draw(map.chunks[0]);
+    shader_program = create_shader_program(VERTEX_SHADER_PATH, FRAGMENT_SHADER_PATH);
+    glUseProgram(shader_program);
 
-    map_update();
-    chunk_draw(map.chunks[0]);
+    init_buffers();
 
+    glUniform2f(glGetUniformLocation(shader_program, "u_offset"), 0.0f, 0.0f);
+    glUniform3f(glGetUniformLocation(shader_program, "u_color"), 1.0f, 0.0f, 0.0f);
+
+    while (!glfwWindowShouldClose(window)) {
+        glfwPollEvents();
+        proccess_input(window);
+
+        render(window);
+        glfwSwapBuffers(window);
+    }
+
+    glfwTerminate();
     return 0;
 }
