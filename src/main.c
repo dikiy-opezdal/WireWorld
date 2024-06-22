@@ -4,6 +4,7 @@
 #include <stdlib.h>
 
 #define byte unsigned char
+#define uint unsigned int
 
 #define CHUNK_SIZE 16
 #define MAP_SIZE 128
@@ -18,25 +19,25 @@ enum CELLS {
 typedef struct
 {
     byte cells[CHUNK_SIZE * CHUNK_SIZE];
-    unsigned int update_queue[CHUNK_SIZE * CHUNK_SIZE]; // #TODO: dynamic array
-    unsigned int queue_length; 
+    uint update_queue[CHUNK_SIZE * CHUNK_SIZE]; // #TODO: dynamic array
+    uint queue_length; 
 } chunk_t;
 
 typedef struct
 {
     chunk_t chunks[MAP_SIZE * MAP_SIZE]; // #TODO: dynamic array
-    unsigned int update_queue[MAP_SIZE * MAP_SIZE]; // #TODO: dynamic array
-    unsigned int queue_length;
+    uint update_queue[MAP_SIZE * MAP_SIZE]; // #TODO: dynamic array
+    uint queue_length;
 } map_t;
 
 map_t map;
-chunk_t buffer;
+map_t buffer;
 
-byte count_neighbours(chunk_t *chunk, byte cell) { // #FIXME: chunk borders
+byte count_neighbours(map_t *buffer, uint chunk_id, byte cell) { // #FIXME: chunk borders
     byte neighbours = 0;
     for (int y = -1; y < 2; y++) {
         for (int x = -1; x < 2; x++) {
-            if (chunk->cells[cell + (y*CHUNK_SIZE + x)] == HEAD) {
+            if (buffer->chunks[chunk_id].cells[cell + (y*CHUNK_SIZE + x)] == HEAD) {
                 neighbours++;
             }
         }
@@ -52,8 +53,8 @@ void chunk_draw(chunk_t chunk) {
     }
 }
 
-void cell_update(chunk_t *buffer_chunk, chunk_t *chunk, byte cell) { // #FIXME: chunk borders
-    switch (buffer_chunk->cells[cell]) {
+void cell_update(map_t *buffer, chunk_t *chunk, uint chunk_id, byte cell) { // #FIXME: chunk borders
+    switch (buffer->chunks[chunk_id].cells[cell]) {
         case HEAD:
             chunk->cells[cell] = TAIL;
             break;
@@ -61,7 +62,7 @@ void cell_update(chunk_t *buffer_chunk, chunk_t *chunk, byte cell) { // #FIXME: 
             chunk->cells[cell] = COND;
             break;
         case COND:
-            byte neighbours = count_neighbours(buffer_chunk, cell);
+            byte neighbours = count_neighbours(buffer, chunk_id, cell);
             if (neighbours == 1 || neighbours == 2) {
                 chunk->cells[cell] = HEAD;
             }
@@ -72,22 +73,45 @@ void cell_update(chunk_t *buffer_chunk, chunk_t *chunk, byte cell) { // #FIXME: 
 }
 
 void map_update() {
+    memcpy(&buffer, &map, sizeof(chunk_t));
     for (int i = 0; i < map.queue_length; i++) {
-        memcpy(&buffer, &map.chunks[map.update_queue[i]], sizeof(chunk_t));
-        for (int j = 0; j < buffer.queue_length; j++) {
-            cell_update(&buffer, &map.chunks[map.update_queue[i]], buffer.update_queue[j]);
+        chunk_t *chunk = &map.chunks[map.update_queue[i]];
+        for (int j = 0; j < chunk->queue_length; j++) {
+            cell_update(&buffer, chunk, map.update_queue[i], chunk->update_queue[j]);
         }
     }
 }
 
-void set_cell(int x, int y, byte type) { // #FIXME: can already be in queue
-    int chunk_id = (int)(y / MAP_SIZE) * MAP_SIZE + (int)(x / MAP_SIZE);
-    int cell_id = y % CHUNK_SIZE * CHUNK_SIZE + x % CHUNK_SIZE;
+int binarySearch(uint *arr, int low, int high, int t) {
+    while (low <= high) {
+        int mid = low + (high - low) / 2;
 
-    map.chunks[chunk_id].cells[cell_id] = type;
-    if (type != EMPT) {
-        map.chunks[chunk_id].update_queue[map.chunks[chunk_id].queue_length] = cell_id;
-        map.chunks[chunk_id].queue_length++;
+        if (arr[mid] == t) return mid;
+        if (arr[mid] < t) low = mid + 1;
+        else high = mid - 1;
+    }
+
+    return -1;
+}
+
+void set_cell(int x, int y, byte type) {
+    chunk_t *chunk = &map.chunks[(int)(y / MAP_SIZE) * MAP_SIZE + (int)(x / MAP_SIZE)];
+    int cell_id = y % CHUNK_SIZE * CHUNK_SIZE + x % CHUNK_SIZE;
+    byte past_type = chunk->cells[cell_id];
+
+    if (past_type == type) return;
+    chunk->cells[cell_id] = type;
+
+    if (past_type != EMPT && type != EMPT) return;
+    else if (past_type != EMPT && type == EMPT) {
+        int id = binarySearch(chunk->update_queue, 0, chunk->queue_length, cell_id);
+        if (id < 0) return;
+        chunk->queue_length--;
+        chunk->update_queue[id] = chunk->update_queue[chunk->queue_length];
+    }
+    else {
+        chunk->update_queue[chunk->queue_length] = cell_id;
+        chunk->queue_length++;
     }
 }
 
