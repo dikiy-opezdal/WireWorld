@@ -20,23 +20,23 @@ enum CELLS {
 
 typedef struct
 {
-    byte cells[CHUNK_SIZE * CHUNK_SIZE];
-    uint update_queue[CHUNK_SIZE * CHUNK_SIZE]; // #TODO: dynamic array
-    uint queue_length; 
+    int cells[CHUNK_SIZE * CHUNK_SIZE];
+    int update_queue[CHUNK_SIZE * CHUNK_SIZE]; // #TODO: dynamic array
+    int queue_length; 
 } chunk_t;
 
 typedef struct
 {
     chunk_t chunks[MAP_SIZE * MAP_SIZE]; // #TODO: dynamic array
-    uint update_queue[MAP_SIZE * MAP_SIZE]; // #TODO: dynamic array
-    uint queue_length;
+    int update_queue[MAP_SIZE * MAP_SIZE]; // #TODO: dynamic array
+    int queue_length;
 } map_t;
 
 map_t map;
 map_t buffer;
 
-byte count_neighbours(map_t *buffer, uint chunk_id, byte cell) { // #FIXME: chunk borders
-    byte neighbours = 0;
+byte count_neighbours(map_t *buffer, int chunk_id, int cell) { // #FIXME: chunk borders
+    int neighbours = 0;
     for (int y = -1; y < 2; y++) {
         for (int x = -1; x < 2; x++) {
             if (buffer->chunks[chunk_id].cells[cell + (y*CHUNK_SIZE + x)] == HEAD) {
@@ -48,14 +48,15 @@ byte count_neighbours(map_t *buffer, uint chunk_id, byte cell) { // #FIXME: chun
     return neighbours;
 }
 
-void chunk_draw(chunk_t chunk) {
+void chunk_draw(int chunk_id) {
+    chunk_t chunk = map.chunks[chunk_id];
     for (int i = 0; i < CHUNK_SIZE * CHUNK_SIZE; i++) {
         if (i % CHUNK_SIZE == 0) printf("\n");
         printf("%d", chunk.cells[i]);
     }
 }
 
-void cell_update(map_t *buffer, chunk_t *chunk, uint chunk_id, byte cell) { // #FIXME: chunk borders
+void cell_update(map_t *buffer, chunk_t *chunk, int chunk_id, byte cell) { // #FIXME: chunk borders
     switch (buffer->chunks[chunk_id].cells[cell]) {
         case HEAD:
             chunk->cells[cell] = TAIL;
@@ -70,7 +71,7 @@ void cell_update(map_t *buffer, chunk_t *chunk, uint chunk_id, byte cell) { // #
             }
             break;
         default:
-            chunk->cells[cell] = EMPT;
+            break;
     }
 }
 
@@ -84,22 +85,29 @@ void map_update() {
     }
 }
 
-int binarySearch(uint *arr, int low, int high, int t) {
-    while (low <= high) {
-        int mid = low + (high - low) / 2;
+int binarySearch(int *arr, int low, int high, int t) {
+    if (low < high) {
+        while (low <= high) {
+            int mid = low + (high - low) / 2;
 
-        if (arr[mid] == t) return mid;
-        if (arr[mid] < t) low = mid + 1;
-        else high = mid - 1;
+            if (arr[mid] == t) return mid;
+            if (arr[mid] < t) low = mid + 1;
+            else high = mid - 1;
+        }
     }
 
     return -1;
 }
 
-void set_cell(int x, int y, byte type) {
-    chunk_t *chunk = &map.chunks[(int)(y / MAP_SIZE) * MAP_SIZE + (int)(x / MAP_SIZE)];
+chunk_t *get_chunk(map_t *map) {
+
+}
+
+void set_cell(int x, int y, int type) {
+    int chunk_id = (int)(y / MAP_SIZE) * MAP_SIZE + (int)(x / MAP_SIZE);
+    chunk_t *chunk = &map.chunks[chunk_id];
     int cell_id = y % CHUNK_SIZE * CHUNK_SIZE + x % CHUNK_SIZE;
-    byte past_type = chunk->cells[cell_id];
+    int past_type = chunk->cells[cell_id];
 
     if (past_type == type) return;
     chunk->cells[cell_id] = type;
@@ -110,17 +118,26 @@ void set_cell(int x, int y, byte type) {
         if (id < 0) return;
         chunk->queue_length--;
         chunk->update_queue[id] = chunk->update_queue[chunk->queue_length];
+
+        if (chunk->queue_length < 1) {
+            id = binarySearch(map.update_queue, 0, map.queue_length, chunk_id);
+            if (id < 0) return;
+            map.queue_length--;
+            map.update_queue[id] = map.update_queue[map.queue_length];
+        }
     }
     else {
         chunk->update_queue[chunk->queue_length] = cell_id;
         chunk->queue_length++;
+
+        int id = binarySearch(map.update_queue, 0, map.queue_length, chunk_id);
+        if (id >= 0) return;
+        map.update_queue[map.queue_length] = chunk_id;
+        map.queue_length++;
     }
 }
 
 void map_init() {
-    map.update_queue[map.queue_length] = 0;
-    map.queue_length++;
-    
     set_cell(8, 8, HEAD);
 
     set_cell(5, 8, COND);

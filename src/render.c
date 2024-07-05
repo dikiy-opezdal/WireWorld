@@ -44,10 +44,14 @@ void render() {
     proccess_input();
 
     glClear(GL_COLOR_BUFFER_BIT);
-
     glDrawElementsInstanced(GL_TRIANGLES, 6, GL_UNSIGNED_BYTE, 0, instd_len / 5);
 
     glfwSwapBuffers(window);
+}
+
+void clear_instance_data() {
+    instd_len = 0;
+    instance_data = realloc(instance_data, 0);
 }
 
 void add_instance(float x, float y, int type) {

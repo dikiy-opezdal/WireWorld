@@ -10,6 +10,10 @@ int main() {
         terminate_renderer();
         return -1;
     }
+    map_init();
+    chunk_draw(0);
+    map_update();
+    chunk_draw(0);
 
     set_scale(16.0f);
     set_camera_pos(1.0f, 1.0f);
@@ -22,6 +26,8 @@ int main() {
         add_instance(0.0f, 2.0f, 2);
 
         render();
+
+        clear_instance_data();
     }
 
     terminate_renderer();
