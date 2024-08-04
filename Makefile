@@ -1,15 +1,15 @@
-.PHONY: all clean
+.PHONY: all clean run
 
 CC        = cc
-TARGET    = WireWorld
+TARGET    = a
 
 SRCDIR    = src
 INCDIR    = include
 LIBDIR    = lib
 BLDDIR    = build
 
-CFLAGS    = -I$(INCDIR) -fopenmp -O3 -Wall -g
-LDFLAGS   = -static -lopengl32 -L$(LIBDIR) -lglfw3
+CFLAGS    = -I$(INCDIR) -O3 -Wall -g
+LDFLAGS   = -static -L$(LIBDIR)
 
 SRC       = $(wildcard   $(SRCDIR)/*.c)
 OBJ       = $(subst      $(SRCDIR)/,$(BLDDIR)/,$(SRC:.c=.o))
