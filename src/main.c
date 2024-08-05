@@ -46,31 +46,98 @@ void set_cell(map_t *map, pos_t pos, int type) {
     map->chunks[pos.y / CHUNK_SIZE][pos.x / CHUNK_SIZE].cells[pos.y % CHUNK_SIZE][pos.x % CHUNK_SIZE].type = type;
 }
 
-void load_map(map_t *map) {
-    map->queue.chunks = calloc(4, sizeof(chunk_t));
-    map->queue.len = 4;
+void load_map(char *filepath, map_t *map) {
+    FILE *file = fopen(filepath, "rb");
 
-    map->queue.chunks[0] = &map->chunks[0][0];
-    map->queue.chunks[1] = &map->chunks[0][1];
-    map->queue.chunks[2] = &map->chunks[1][0];
-    map->queue.chunks[3] = &map->chunks[1][1];
+    unsigned short chcount;
+    fread(&chcount, sizeof(short), 1, file);
+    if (chcount > 0) {
+        printf("chcount: %d\n", chcount);
+        for (int i = 0; i < chcount; i++) {
+            printf("chunk %d\n", i);
+            chunk_t chunk = {0};
 
-    set_cell(map, (pos_t){13, 14}, 2);
-    set_cell(map, (pos_t){13, 15}, 1);
-    set_cell(map, (pos_t){13, 16}, 3);
-    set_cell(map, (pos_t){13, 17}, 3);
-    set_cell(map, (pos_t){14, 18}, 3);
-    set_cell(map, (pos_t){15, 18}, 3);
-    set_cell(map, (pos_t){16, 18}, 3);
-    set_cell(map, (pos_t){17, 18}, 3);
-    set_cell(map, (pos_t){18, 17}, 3);
-    set_cell(map, (pos_t){18, 16}, 3);
-    set_cell(map, (pos_t){18, 15}, 3);
-    set_cell(map, (pos_t){18, 14}, 3);
-    set_cell(map, (pos_t){17, 13}, 3);
-    set_cell(map, (pos_t){16, 13}, 3);
-    set_cell(map, (pos_t){15, 13}, 3);
-    set_cell(map, (pos_t){14, 13}, 3);
+            short x, y;
+            fread(&x, sizeof(short), 1, file);
+            fread(&y, sizeof(short), 1, file);
+            chunk.pos.x = (int)x;
+            chunk.pos.y = (int)y;
+            printf("\tpos: %d | %d\n", chunk.pos.x, chunk.pos.y);
+
+            unsigned char ccount;
+            fread(&ccount, sizeof(char), 1, file);
+            printf("\tccount: %d\n", ccount);
+            unsigned char pos, type;
+            for (int i = 0; i < ccount; i++) {
+                printf("\tcell %d\n", i);
+                fread(&pos, sizeof(char), 1, file);
+                fread(&type, sizeof(char), 1, file);
+                chunk.cells[pos/16][pos%16].type = type;
+                printf("\t\tpos | type: %d | %d\n", pos, chunk.cells[pos/16][pos%16].type);
+            }
+            ccount = 0;
+
+            map->chunks[chunk.pos.y][chunk.pos.x] = chunk;
+            map->queue.chunks = realloc(map->queue.chunks, sizeof(chunk_t **)*(map->queue.len+1));
+            map->queue.chunks[map->queue.len] = &map->chunks[chunk.pos.y][chunk.pos.x];
+            map->queue.len++;
+        }
+        printf("Loaded %s map\n", filepath);
+    }
+    else {
+        printf("Failed to load %s map, loading default\n", filepath);
+        set_cell(map, (pos_t){13, 14}, 2); set_cell(map, (pos_t){13, 15}, 1); set_cell(map, (pos_t){13, 16}, 3); set_cell(map, (pos_t){13, 17}, 3); set_cell(map, (pos_t){14, 18}, 3); set_cell(map, (pos_t){15, 18}, 3); set_cell(map, (pos_t){16, 18}, 3); set_cell(map, (pos_t){17, 18}, 3); set_cell(map, (pos_t){18, 17}, 3); set_cell(map, (pos_t){18, 16}, 3); set_cell(map, (pos_t){18, 15}, 3); set_cell(map, (pos_t){18, 14}, 3); set_cell(map, (pos_t){17, 13}, 3); set_cell(map, (pos_t){16, 13}, 3); set_cell(map, (pos_t){15, 13}, 3); set_cell(map, (pos_t){14, 13}, 3);
+        map->queue.chunks = calloc(4, sizeof(chunk_t));
+        map->queue.len = 4;
+
+        map->queue.chunks[0] = &map->chunks[0][0];
+        map->queue.chunks[1] = &map->chunks[0][1];
+        map->queue.chunks[2] = &map->chunks[1][0];
+        map->queue.chunks[3] = &map->chunks[1][1];
+    }
+    fclose(file);
+}
+
+void save_map(char *filepath, map_t *map) {
+    FILE *file = fopen(filepath, "wb");
+    unsigned short chcount = (short)map->queue.len;
+    fwrite(&chcount, sizeof(short), 1, file);
+    printf("chcount: %d\n", chcount);
+
+    for (int i = 0; i < map->queue.len; i++) {
+        chunk_t chunk = *map->queue.chunks[i];
+        printf("chunk %d\n", i);
+
+        short x = (short)chunk.pos.x, y = (short)chunk.pos.y;
+        fwrite(&x, sizeof(short), 1, file);
+        fwrite(&y, sizeof(short), 1, file);
+        printf("\tpos: %d | %d\n", x, y);
+
+        unsigned char ccount;
+        for (int y = 0; y < CHUNK_SIZE; y++) {
+            for (int x = 0; x < CHUNK_SIZE; x++) {
+                if (chunk.cells[y][x].type > 0 && chunk.cells[y][x].type < 4) ccount++;
+            }
+        }
+        fwrite(&ccount, sizeof(char), 1, file);
+        printf("\tccount: %d\n", ccount);
+        ccount = 0;
+
+        for (int y = 0; y < CHUNK_SIZE; y++) {
+            for (int x = 0; x < CHUNK_SIZE; x++) {
+                if (chunk.cells[y][x].type == 0) continue;
+                printf("\tcell %d\n", y*CHUNK_SIZE+x);
+                unsigned char pos = (unsigned char)(y*CHUNK_SIZE+x);
+                fwrite(&pos, sizeof(char), 1, file);
+                unsigned char type = (unsigned char)chunk.cells[y][x].type;
+                fwrite(&type, sizeof(char), 1, file);
+                printf("\t\tpos | type: %d | %d\n", pos, chunk.cells[y][x].type);
+            }
+        }
+    }
+    fclose(file);
+
+    printf("Saved %s map\n", filepath);
 }
 
 int sign(int num) {
@@ -155,7 +222,8 @@ int main() {
     pos_t cam = {0};
 
     init_map(&map);
-    load_map(&map);
+    load_map("map.wwm", &map);
+    //save_map("map.wwm", &map);
 
     while (1) {
         printm(map, cam);
